@@ -4,6 +4,8 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -133,40 +135,43 @@ public class FilmeService {
 
     }
 
-    private List<ProdutorRetornoDTO> findMinIntervals(List<ProdutorRetornoDTO> intervals) {
-
-        if (intervals.isEmpty()) {
-
-            return new ArrayList<>();
-        }
-
-        int minInterval = intervals.stream().mapToInt(ProdutorRetornoDTO::getInterval).min().orElse(0);
-
-        return intervals.stream().filter(i -> i.getInterval() == minInterval).collect(Collectors.toList());
-    }
-
-    private List<ProdutorRetornoDTO> findMaxIntervals(List<ProdutorRetornoDTO> intervals) {
-
-        if (intervals.isEmpty()) {
-
-            return new ArrayList<>();
-        }
-
-        int maxInterval = intervals.stream().mapToInt(ProdutorRetornoDTO::getInterval).max().orElse(0);
-
-        return intervals.stream().filter(i -> i.getInterval() == maxInterval).collect(Collectors.toList());
-    }
-
     public IntervaloPremiosDTO getIntervaloPremios() {
 
-        List<ProdutorRetornoDTO> allIntervals = filmeRepository.findProducerIntervals();
+        List<ProdutorRetornoDTO> resultados = filmeRepository.findProducerIntervals();
 
-        IntervaloPremiosDTO intervaloPremios = new IntervaloPremiosDTO();
-        intervaloPremios.setMin(findMinIntervals(allIntervals));
-        intervaloPremios.setMax(findMaxIntervals(allIntervals));
+        Map<String, List<ProdutorRetornoDTO>> intervalosPorProdutor = resultados.stream()
+                .collect(Collectors.groupingBy(ProdutorRetornoDTO::getProducer));
 
-        return intervaloPremios;
+        List<ProdutorRetornoDTO> allIntervals = new ArrayList<>();
 
+        for (List<ProdutorRetornoDTO> produtorIntervalos : intervalosPorProdutor.values()) {
+
+            produtorIntervalos.sort(Comparator.comparingInt(ProdutorRetornoDTO::getPreviousWin));
+
+            if (produtorIntervalos.size() > 1) {
+
+                for (int i = 0; i < produtorIntervalos.size() - 1; i++) {
+                    int previousWin = produtorIntervalos.get(i).getPreviousWin();
+                    int followingWin = produtorIntervalos.get(i + 1).getPreviousWin();
+                    int interval = followingWin - previousWin;
+
+                    allIntervals.add(new ProdutorRetornoDTO(produtorIntervalos.get(i).getProducer(), previousWin,
+                            followingWin, interval));
+                }
+            }
+        }
+
+        IntervaloPremiosDTO intervaloPremiosDTO = IntervaloPremiosDTO.builder().min(allIntervals.stream()
+                .filter(dto -> dto.getInterval() == Collections
+                        .min(allIntervals.stream().map(ProdutorRetornoDTO::getInterval).collect(Collectors.toList())))
+                .collect(Collectors.toList()))
+                .max(allIntervals.stream()
+                        .filter(dto -> dto.getInterval() == Collections.max(allIntervals.stream()
+                                .map(ProdutorRetornoDTO::getInterval).collect(Collectors.toList())))
+                        .collect(Collectors.toList()))
+                .build();
+
+        return intervaloPremiosDTO;
     }
 
 }
